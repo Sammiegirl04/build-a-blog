@@ -16,9 +16,12 @@ class Handler(webapp2.RequestHandler):
     def render_str(self, template, **params):
         t = jinja_env.get_template(template)
         return t.render(params)
-
     def render(self, template, **kw):
         self.write(self.render_str(template, **kw))
+
+    def get_posts(self, limit, offset):
+        query = Post.all().order('-created')
+        return query.fetch(limit=limit, offset=offset)
 
 class Blog(db.Model):
     title = db.StringProperty(required = True)
@@ -26,10 +29,18 @@ class Blog(db.Model):
     created = db.DateTimeProperty(auto_now_add = True)
 
 class MainPage(Handler):
+    def get(self):
+        blogs = db.GqlQuery("SELECT * FROM Blog ORDER BY created DESC LIMIT 5")
+        t = jinja_env.get_template("blog.html")
+        content = t.render(blogs=blogs)
+        self.response.write(content)
+
+
+class NewPost(Handler):
     def render_front(self, title="", body="", error=""):
-        blogs = db.GqlQuery("SELECT * FROM Blog"
-                            "ORDER BY created DESC")
-        self.render("front.html", title=title, body=body, error=error, blogs=blogs)
+        t = jinja_env.get_template("front.html")
+        content = t.render(title=title, body=body, error=error)
+        self.response.out.write(content)
 
     def get(self):
         self.render_front()
@@ -39,13 +50,32 @@ class MainPage(Handler):
         body = self.request.get("body")
 
         if title and body:
-            a = Blog(title = title, body = body)
-            a.put()
-            self.redirect("/")
+            blog = Blog(title = title, body = body)
+            blog.put()
+
+            id = blog.key().id()
+            self.redirect("/blog/%s" % id)
         else:
             error = "we need both a title and a body!"
             self.render_front(title, body, error)
 
-app = webapp2.WSGIApplication([
-    ('/', Handler)
-], debug=True)
+class ViewPostHandler(webapp2.RequestHandler):
+    def get(self, id):
+
+        blog = Blog.get_by_id(int(id))
+        if blog:
+            t = jinja_env.get_template("post.html")
+            response = t.render(blog=blog)
+            self.response.out.write(response)
+        else:
+            error = "there is no post with id %s" % id
+            self.response.write(error=error)
+
+
+
+
+
+
+app = webapp2.WSGIApplication([('/', MainPage),
+                                ('/newpost', NewPost),
+                                webapp2.Route('/blog/<id:\d+>', ViewPostHandler)], debug=True)
