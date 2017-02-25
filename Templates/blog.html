@@ -60,6 +60,7 @@
     <body>
         <h1>This Blog!</h1>
                 {% for blog in blogs %}
+                <h2><a href="/blog/{{ blog.key().id() }}">{{ blog.title }}</a></h2>
                 <h2 class="blog-title">{{ blog.title }}</h2>
                 <p class="blog-body">{{ blog.body }}</p>
 
